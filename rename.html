@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Realtime Node Renamer</title>
+    <style>
+        :root {
+            --bg-color: #f4f6f8;
+            --card-bg: #ffffff;
+            --primary: #0288d1;
+            --primary-hover: #01579b;
+            --text: #333333;
+            --border: #cccccc;
+            --success-bg: #d4edda;
+            --success-text: #155724;
+            --error-bg: #f8d7da;
+            --error-text: #721c24;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text);
+            max-width: 550px;
+            margin: 60px auto;
+            padding: 20px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        h2 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            color: #111;
+            font-size: 24px;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 15px;
+            transition: border-color 0.2s;
+        }
+
+        input:focus {
+            border-color: var(--primary);
+            outline: none;
+        }
+
+        button {
+            background-color: var(--primary);
+            color: white;
+            padding: 12px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+            font-weight: bold;
+            margin-top: 10px;
+            transition: background-color 0.2s;
+        }
+
+        button:hover { 
+            background-color: var(--primary-hover); 
+        }
+
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        #status {
+            margin-top: 20px;
+            padding: 12px;
+            border-radius: 4px;
+            display: none;
+            font-size: 14px;
+            line-break: anywhere;
+            font-weight: 500;
+        }
+
+        .success { background-color: var(--success-bg); color: var(--success-text); border: 1px solid #c3e6cb; }
+        .error { background-color: var(--error-bg); color: var(--error-text); border: 1px solid #f5c6cb; }
+        .info { background-color: #e2e3e5; color: #383d41; border: 1px solid #d6d8db; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>Rename Database Node ID</h2>
+        
+        <div class="form-group">
+            <label for="path">Parent Path</label>
+            <input type="text" id="path" value="walks" placeholder="e.g., walks">
+        </div>
+        
+        <div class="form-group">
+            <label for="oldKey">Old Node ID</label>
+            <input type="text" id="oldKey" value="walks_190" placeholder="e.g., walks_190">
+        </div>
+        
+        <div class="form-group">
+            <label for="newKey">New Node ID</label>
+            <input type="text" id="newKey" value="walk_190" placeholder="e.g., walk_190">
+        </div>
+        
+        <button id="renameBtn">Execute Rename</button>
+        <div id="status"></div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+        import { getDatabase, ref, get, update } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyB9WLJSl4QmubgBW5rknmnMeHcNbkwqOHQ",
+          authDomain: "programme-planning.firebaseapp.com",
+          databaseURL: "https://programme-planning-default-rtdb.europe-west1.firebasedatabase.app",
+          projectId: "programme-planning",
+          storageBucket: "programme-planning.firebasestorage.app",
+          messagingSenderId: "1028011310189",
+          appId: "1:1028011310189:web:8ac4f37a8d248899735364",
+          measurementId: "G-BBQ4Q6TQHD"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        const btn = document.getElementById('renameBtn');
+        const statusDiv = document.getElementById('status');
+
+        function updateStatus(text, type = 'success') {
+            statusDiv.innerText = text;
+            statusDiv.className = type;
+            statusDiv.style.display = 'block';
+        }
+
+        btn.addEventListener('click', async () => {
+            const path = document.getElementById('path').value.trim();
+            const oldKey = document.getElementById('oldKey').value.trim();
+            const newKey = document.getElementById('newKey').value.trim();
+
+            if (!path || !oldKey || !newKey) {
+                updateStatus("All database field variables are required.", 'error');
+                return;
+            }
+
+            btn.disabled = true;
+            updateStatus("Reading from remote node...", 'info');
+
+            try {
+                const oldNodeRef = ref(db, `${path}/${oldKey}`);
+                const snapshot = await get(oldNodeRef);
+
+                if (!snapshot.exists()) {
+                    updateStatus(`Error: The path "${path}/${oldKey}" does not exist in your database.`, 'error');
+                    btn.disabled = false;
+                    return;
+                }
+
+                const payloadData = snapshot.val();
+
+                const operations = {};
+                operations[`${path}/${oldKey}`] = null;
+                operations[`${path}/${newKey}`] = payloadData;
+
+                updateStatus("Migrating structural indexes...", 'info');
+                await update(ref(db), operations);
+                
+                updateStatus(`Success! Successfully swapped node index key layout from "${oldKey}" over to "${newKey}".`, 'success');
+                
+            } catch (error) {
+                console.error(error);
+                if (error.message.includes("permission_denied") || error.code === "PERMISSION_DENIED") {
+                    updateStatus("Firebase Error: PERMISSION_DENIED. Check your Realtime Database Rules tab in the console panel.", 'error');
+                } else {
+                    updateStatus(`Database connection fail: ${error.message}`, 'error');
+                }
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
